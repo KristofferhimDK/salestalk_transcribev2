@@ -8,6 +8,7 @@ torchaudio
 # Hugging Face modeller
 transformers
 accelerate
+huggingface_hub
 
 # Audio processing 
 librosa

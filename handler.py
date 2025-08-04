@@ -15,6 +15,17 @@ whisper_processor = None
 whisper_model = None
 device = None
 
+# Tilføj øverst i init_models() funktionen:
+import os
+from huggingface_hub import login
+
+# Login med din token
+hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
+if hf_token:
+    login(token=hf_token)
+else:
+    print("⚠️ Ingen HuggingFace token fundet!")
+
 def init_models():
     """Initialiserer alle modeller - køres én gang ved opstart"""
     global segmentation_pipeline, diarization_pipeline, whisper_processor, whisper_model, device

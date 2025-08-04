@@ -2,7 +2,7 @@ import runpod
 import torch
 import librosa
 import numpy as np
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 from pyannote.audio import Pipeline
 import tempfile
 import os
@@ -11,13 +11,13 @@ import json
 # Globale variabler - loader modellerne én gang når containeren starter
 segmentation_pipeline = None
 diarization_pipeline = None
-whisper_processor = None
-whisper_model = None
+whisper_pipe = None
 device = None
+torch_dtype = None
 
 def init_models():
     """Initialiserer alle modeller - køres én gang ved opstart"""
-    global segmentation_pipeline, diarization_pipeline, whisper_processor, whisper_model, device
+    global segmentation_pipeline, diarization_pipeline, whisper_pipe, device, torch_dtype
     
     # HuggingFace authentication
     from huggingface_hub import login
@@ -30,7 +30,8 @@ def init_models():
         print("❌ Ingen HuggingFace token fundet!")
     
     print("🚀 Starter model initialisering...")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
     print(f"📱 Bruger device: {device}")
     
     # 1. Segmentering (dine modeller)
@@ -38,16 +39,39 @@ def init_models():
     segmentation_pipeline = Pipeline.from_pretrained("syvai/speaker-segmentation")
     segmentation_pipeline = segmentation_pipeline.to(torch.device(device))
     
-    # 2. Diarisering 
+    # 2. Diarisering (opdateret med korrekte instruktioner)
     print("👥 Loader diarization model...")
-    diarization_pipeline = Pipeline.from_pretrained("syvai/speaker-diarization-3.1")
+    diarization_pipeline = Pipeline.from_pretrained(
+        "syvai/speaker-diarization-3.1",
+        use_auth_token=hf_token
+    )
     diarization_pipeline = diarization_pipeline.to(torch.device(device))
     
-    # 3. Whisper til transskription
+    # 3. Whisper til transskription (bruger deres instruktioner)
     print("🎤 Loader Whisper model...")
-    whisper_processor = WhisperProcessor.from_pretrained("syvai/hviske-v3-conversation")
-    whisper_model = WhisperForConditionalGeneration.from_pretrained("syvai/hviske-v3-conversation")
-    whisper_model = whisper_model.to(device)
+    model_id = "syvai/hviske-v3-conversation"
+    
+    model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        model_id, 
+        torch_dtype=torch_dtype, 
+        low_cpu_mem_usage=True, 
+        use_safetensors=True
+    )
+    model.to(device)
+    processor = AutoProcessor.from_pretrained(model_id)
+    
+    # Opret ASR pipeline
+    whisper_pipe = pipeline(
+        "automatic-speech-recognition",
+        model=model,
+        tokenizer=processor.tokenizer,
+        feature_extractor=processor.feature_extractor,
+        max_new_tokens=128,
+        chunk_length_s=30,
+        batch_size=16,
+        torch_dtype=torch_dtype,
+        device=device,
+    )
     
     print("✅ Alle modeller loaded!")
 
@@ -118,13 +142,9 @@ def transcribe_segments(audio_path, segments, speakers):
         end_sample = int(segment_end * sr)
         segment_audio = audio[start_sample:end_sample]
         
-        # Transskriber dette segment
-        inputs = whisper_processor(segment_audio, sampling_rate=16000, return_tensors="pt").to(device)
-        
-        with torch.no_grad():
-            predicted_ids = whisper_model.generate(**inputs, language="da")
-        
-        transcription = whisper_processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+        # Transskriber dette segment med den nye pipeline
+        result = whisper_pipe(segment_audio)
+        transcription = result["text"]
         
         final_segments.append({
             "start": segment_start,

@@ -25,30 +25,33 @@ def init_models():
     hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
     if hf_token:
         login(token=hf_token)
-        print("✅ HuggingFace login successful!")
+        print("HuggingFace login successful")
     else:
-        print("❌ Ingen HuggingFace token fundet!")
+        print("ERROR: Ingen HuggingFace token fundet")
     
-    print("🚀 Starter model initialisering...")
+    print("Starter model initialisering...")
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    print(f"📱 Bruger device: {device}")
+    print(f"Bruger device: {device}")
     
-    # 1. Segmentering (dine modeller)
-    print("📊 Loader segmentation model...")
-    segmentation_pipeline = Pipeline.from_pretrained("syvai/speaker-segmentation")
+    # 1. Segmentering
+    print("Loader segmentation model...")
+    segmentation_pipeline = Pipeline.from_pretrained(
+        "syvai/speaker-segmentation",
+        use_auth_token=hf_token
+    )
     segmentation_pipeline = segmentation_pipeline.to(torch.device(device))
     
-    # 2. Diarisering (opdateret med korrekte instruktioner)
-    print("👥 Loader diarization model...")
+    # 2. Diarisering
+    print("Loader diarization model...")
     diarization_pipeline = Pipeline.from_pretrained(
         "syvai/speaker-diarization-3.1",
         use_auth_token=hf_token
     )
     diarization_pipeline = diarization_pipeline.to(torch.device(device))
     
-    # 3. Whisper til transskription (bruger deres instruktioner)
-    print("🎤 Loader Whisper model...")
+    # 3. Whisper til transskription
+    print("Loader Whisper model...")
     model_id = "syvai/hviske-v3-conversation"
     
     model = AutoModelForSpeechSeq2Seq.from_pretrained(
@@ -73,11 +76,11 @@ def init_models():
         device=device,
     )
     
-    print("✅ Alle modeller loaded!")
+    print("Alle modeller loaded successfully")
 
 def segment_audio(audio_path):
     """Step 1: Segmenterer lyden i mindre stykker"""
-    print("📊 Starter segmentering...")
+    print("Starter segmentering...")
     
     # Kør segmentation pipeline
     segmentation = segmentation_pipeline(audio_path)
@@ -91,12 +94,12 @@ def segment_audio(audio_path):
             "duration": segment.end - segment.start
         })
     
-    print(f"📊 Fandt {len(segments)} segmenter")
+    print(f"Fandt {len(segments)} segmenter")
     return segments
 
 def diarize_audio(audio_path):
     """Step 2: Finder hvem der taler hvornår"""
-    print("👥 Starter diarisering...")
+    print("Starter diarisering...")
     
     # Kør diarization pipeline  
     diarization = diarization_pipeline(audio_path)
@@ -111,12 +114,12 @@ def diarize_audio(audio_path):
             "duration": turn.end - turn.start
         })
     
-    print(f"👥 Fandt {len(set(s['speaker'] for s in speakers))} unikke speakers")
+    print(f"Fandt {len(set(s['speaker'] for s in speakers))} unikke speakers")
     return speakers
 
 def transcribe_segments(audio_path, segments, speakers):
     """Step 3: Transskriberer hver persons tale"""
-    print("🎤 Starter transskription...")
+    print("Starter transskription...")
     
     # Load audio
     audio, sr = librosa.load(audio_path, sr=16000)
@@ -154,7 +157,7 @@ def transcribe_segments(audio_path, segments, speakers):
             "text": transcription.strip()
         })
     
-    print(f"🎤 Transskriberede {len(final_segments)} segmenter")
+    print(f"Transskriberede {len(final_segments)} segmenter")
     return final_segments
 
 def handler(job):
@@ -167,7 +170,7 @@ def handler(job):
         if not audio_url:
             return {"error": "Ingen audio_url provided"}
         
-        print(f"🎵 Behandler audio: {audio_url}")
+        print(f"Behandler audio: {audio_url}")
         
         # Download audio til temp fil
         import requests
@@ -222,7 +225,7 @@ def handler(job):
                 }
             }
             
-            print("✅ Processing færdig!")
+            print("Processing færdig")
             return result
             
         finally:
@@ -230,7 +233,7 @@ def handler(job):
             os.unlink(temp_audio_path)
             
     except Exception as e:
-        print(f"❌ Fejl: {str(e)}")
+        print(f"ERROR: {str(e)}")
         return {"error": str(e)}
 
 # Initialiser modeller når containeren starter

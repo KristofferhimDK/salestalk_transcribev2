@@ -1,24 +1,12 @@
-# RunPod core
 runpod
-
-# PyTorch til GPU
 torch
 torchaudio
-
-# Hugging Face modeller
 transformers
 accelerate
-huggingface_hub
-
-# Audio processing 
 librosa
 soundfile
-
-# Pyannote til diarization/segmentation
-pyannote.audio
-
-# HTTP requests til at downloade filer
+pyannote.audio>=3.1
 requests
-
-# Numpy til array operations
 numpy
+huggingface_hub
+datasets

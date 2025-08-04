@@ -34,13 +34,8 @@ def init_models():
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
     print(f"Bruger device: {device}")
     
-    # 1. Segmentering
-    print("Loader segmentation model...")
-    segmentation_pipeline = Pipeline.from_pretrained(
-        "syvai/speaker-segmentation",
-        use_auth_token=hf_token
-    )
-    segmentation_pipeline = segmentation_pipeline.to(torch.device(device))
+    # Skip segmentation for now - focus on diarization + transcription
+    print("Skipper segmentation - bruger kun diarization...")
     
     # 2. Diarisering
     print("Loader diarization model...")
@@ -181,11 +176,17 @@ def handler(job):
             temp_audio_path = temp_file.name
         
         try:
-            # Step 1: Segmentering
-            segments = segment_audio(temp_audio_path)
-            
-            # Step 2: Diarisering  
+            # Skip segmentation - work directly with diarization
             speakers = diarize_audio(temp_audio_path)
+            
+            # Create simple segments from diarization
+            segments = []
+            for speaker in speakers:
+                segments.append({
+                    "start": speaker["start"],
+                    "end": speaker["end"],
+                    "duration": speaker["duration"]
+                })
             
             # Step 3: Transskription
             final_segments = transcribe_segments(temp_audio_path, segments, speakers)
